@@ -69,9 +69,9 @@ def serial_to_rows(serials, columns=4):
 if "product_table" not in st.session_state:
     st.session_state.product_table = [
         {
-            "Model name": "",
+            "Tên Sản Phẩm": "",
             "Số lượng": 1,
-            "Xuất xứ": "Trung Quốc"
+            "Xuất xứ (Double click nếu chọn Đài Loan)": "Trung Quốc"
         }
     ]
 
@@ -210,7 +210,7 @@ if clean_rows:
     st.markdown("### Serial Number")
 
     st.caption(
-        "Paste Serial Number riêng cho từng model. "
+        "Paste Serial Number riêng cho từng model. Mỗi dòng 1 Serial"
         "Có thể copy trực tiếp từ Excel."
     )
 
