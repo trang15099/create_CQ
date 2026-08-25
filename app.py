@@ -292,7 +292,7 @@ if st.button(
     try:
 
         doc = DocxTemplate(
-            "templates/CQ_SYSTEM_TEMPLATE.docx"
+            "templates/CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx"
         )
 
         doc.render(context)
