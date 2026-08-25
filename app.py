@@ -5,13 +5,17 @@ from io import BytesIO
 import re
 
 
+# =========================
+# PAGE CONFIG
+# =========================
+
 st.set_page_config(
     page_title="CQ Generator",
     page_icon="📄",
     layout="wide"
 )
 
-st.title("CQ Generator - System")
+st.title("Tạo CQ - ASUS")
 
 
 # =========================
@@ -23,18 +27,27 @@ def parse_serials(raw_text):
     Cho phép Sales paste serial:
     - mỗi serial 1 dòng
     - cách nhau bằng dấu phẩy
+    - cách nhau bằng dấu ;
     - cách nhau bằng space/tab
     """
     if not raw_text:
         return []
 
-    serials = re.split(r"[\n,\t; ]+", raw_text.strip())
-    return [x.strip() for x in serials if x.strip()]
+    serials = re.split(
+        r"[\n,\t; ]+",
+        raw_text.strip()
+    )
+
+    return [
+        x.strip()
+        for x in serials
+        if x.strip()
+    ]
 
 
 def serial_to_rows(serials, columns=4):
     """
-    Chia serial thành bảng 4 cột cho phụ lục
+    Chia serial thành bảng 4 cột cho phụ lục.
     """
     rows = []
 
@@ -50,7 +63,21 @@ def serial_to_rows(serials, columns=4):
 
 
 # =========================
-# GENERAL INFORMATION
+# SESSION STATE
+# =========================
+
+if "product_table" not in st.session_state:
+    st.session_state.product_table = [
+        {
+            "Model name": "",
+            "Số lượng": 1,
+            "Xuất xứ": "Trung Quốc"
+        }
+    ]
+
+
+# =========================
+# 1. GENERAL INFORMATION
 # =========================
 
 st.subheader("1. Thông tin CQ")
@@ -69,6 +96,7 @@ with col2:
         value=date.today()
     )
 
+
 eu_name = st.text_input(
     "Tên EU",
     placeholder="BAN QUẢN LÝ DỰ ÁN..."
@@ -81,87 +109,197 @@ address = st.text_input(
 
 
 # =========================
-# PRODUCT INFORMATION
+# 2. PRODUCT INFORMATION
 # =========================
 
 st.divider()
 
 st.subheader("2. Thông tin sản phẩm")
 
-product_count = st.number_input(
-    "Models",
-    min_value=1,
-    max_value=20,
-    value=1,
-    step=1
+st.caption(
+    "Thêm/xóa dòng trực tiếp trong bảng bên dưới."
 )
+
+
+product_table = st.data_editor(
+    st.session_state.product_table,
+    num_rows="dynamic",
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "Model name": st.column_config.TextColumn(
+            "Model name",
+            width="large",
+            required=True,
+            help="Nhập tên đầy đủ của sản phẩm"
+        ),
+
+        "Số lượng": st.column_config.NumberColumn(
+            "Số lượng",
+            min_value=1,
+            step=1,
+            width="small",
+            required=True
+        ),
+
+        "Xuất xứ": st.column_config.SelectboxColumn(
+            "Xuất xứ",
+            options=[
+                "Trung Quốc",
+                "Đài Loan"
+            ],
+            default="Trung Quốc",
+            width="medium",
+            required=True
+        ),
+    },
+    key="product_editor"
+)
+
+
+# =========================
+# CLEAN PRODUCT ROWS
+# =========================
+
+clean_rows = []
+
+for row in product_table:
+
+    product_name = str(
+        row.get("Model name", "")
+    ).strip()
+
+    if not product_name:
+        continue
+
+    quantity = row.get(
+        "Số lượng",
+        1
+    )
+
+    if quantity is None:
+        quantity = 1
+
+    quantity = int(quantity)
+
+    origin = str(
+        row.get(
+            "Xuất xứ",
+            "Trung Quốc"
+        )
+    ).strip()
+
+    if not origin:
+        origin = "Trung Quốc"
+
+    clean_rows.append({
+        "product_name": product_name,
+        "quantity": quantity,
+        "origin": origin
+    })
+
+
+# =========================
+# SERIAL NUMBER SECTION
+# =========================
 
 products = []
 
-for i in range(product_count):
+if clean_rows:
 
-    with st.expander(
-        f"Sản phẩm {i + 1}",
-        expanded=True
-    ):
+    st.markdown("### Serial Number")
 
-        product_name = st.text_area(
-            "Model name",
-            key=f"product_name_{i}",
-            height=100,
-            placeholder="Nhập tên sản phẩm - Ví dụ: MÁY TÍNH ĐỂ BÀN (PC) ASUS..."
+    st.caption(
+        "Paste Serial Number riêng cho từng model. "
+        "Có thể copy trực tiếp từ Excel."
+    )
+
+
+    for i, row in enumerate(clean_rows):
+
+        st.markdown(
+            f"**{i + 1}. {row['product_name']}**"
         )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            quantity = st.number_input(
-                "Số lượng",
-                min_value=1,
-                value=1,
-                step=1,
-                key=f"quantity_{i}"
-            )
-
-        with col2:
-            origin = st.text_input(
-                "Xuất xứ",
-                value="Trung Quốc",
-                key=f"origin_{i}"
-            )
 
         serial_text = st.text_area(
             "Serial Number",
             key=f"serial_{i}",
-            height=150,
+            height=120,
             placeholder=(
-                "Paste serial vào đây.\n"
-                "Có thể mỗi serial 1 dòng hoặc copy trực tiếp từ Excel."
-            )
+                "Ví dụ:\n"
+                "W3PFAC009325112\n"
+                "W4PFAC009720156\n"
+                "W4PFAC009736158"
+            ),
+            label_visibility="collapsed"
         )
 
-        serials = parse_serials(serial_text)
+        serials = parse_serials(
+            serial_text
+        )
 
         if serials:
+
             st.caption(
                 f"Đã nhận: {len(serials)} Serial Number"
             )
 
-            if len(serials) <= 5:
-                st.info(
-                    "Serial sẽ được hiển thị trực tiếp trên CQ."
-                )
-            else:
-                st.info(
-                    'CQ chính sẽ ghi "Phụ lục đính kèm".'
-                )
 
         products.append({
-            "product_name": product_name,
-            "quantity": quantity,
-            "origin": origin,
+            "product_name": row["product_name"],
+            "quantity": row["quantity"],
+            "origin": row["origin"],
             "serials": serials
         })
+
+
+        st.write("")
+
+
+else:
+
+    st.info(
+        "Hãy nhập ít nhất 1 Model name "
+        "trong bảng để nhập Serial Number."
+    )
+
+
+# =========================
+# APPENDIX STATUS
+# =========================
+
+use_appendix_for_all = any(
+    len(product["serials"]) >= 6
+    for product in products
+)
+
+
+if use_appendix_for_all:
+
+    st.info(
+        "Có ít nhất 1 model từ 6 Serial Number trở lên. "
+        "Toàn bộ Serial Number của CQ "
+        "sẽ được đưa xuống phụ lục."
+    )
+
+
+# =========================
+# SUMMARY
+# =========================
+
+if products:
+
+    total_models = len(products)
+
+    total_serials = sum(
+        len(product["serials"])
+        for product in products
+    )
+
+    st.caption(
+        f"{total_models} model(s) | "
+        f"{total_serials} Serial Number"
+    )
 
 
 # =========================
@@ -170,40 +308,71 @@ for i in range(product_count):
 
 st.divider()
 
+
 if st.button(
     "GENERATE CQ",
     type="primary",
     use_container_width=True
 ):
 
-    # -------------------------
+    # =========================
     # VALIDATION
-    # -------------------------
+    # =========================
 
     errors = []
 
+
     if not eu_name.strip():
-        errors.append("Chưa nhập Tên EU.")
+        errors.append(
+            "Chưa nhập Tên EU."
+        )
+
 
     if not address.strip():
-        errors.append("Chưa nhập Địa chỉ.")
+        errors.append(
+            "Chưa nhập Địa chỉ."
+        )
+
+
+    if not products:
+        errors.append(
+            "Chưa nhập thông tin sản phẩm."
+        )
+
 
     for index, product in enumerate(products):
 
         if not product["product_name"].strip():
+
             errors.append(
-                f"Sản phẩm {index + 1}: chưa nhập tên sản phẩm."
+                f"Sản phẩm {index + 1}: "
+                "chưa nhập Model name."
             )
 
-        # Nếu muốn bắt buộc số serial = quantity,
-        # bỏ comment đoạn dưới:
+
+        if not product["origin"].strip():
+
+            errors.append(
+                f"Sản phẩm {index + 1}: "
+                "chưa chọn Xuất xứ."
+            )
+
+
+        # ==========================================
+        # OPTIONAL:
+        # Bật đoạn dưới nếu muốn bắt buộc:
+        # Số lượng = số Serial
+        # ==========================================
 
         # if len(product["serials"]) != product["quantity"]:
+        #
         #     errors.append(
         #         f"Sản phẩm {index + 1}: "
         #         f"Số lượng ({product['quantity']}) "
-        #         f"không khớp số Serial ({len(product['serials'])})."
+        #         f"không khớp số Serial "
+        #         f"({len(product['serials'])})."
         #     )
+
 
     if errors:
 
@@ -213,81 +382,126 @@ if st.button(
         st.stop()
 
 
-    # -------------------------
+    # =========================
     # PROCESS DATA
-    # -------------------------
+    # =========================
 
     document_products = []
+
     appendix_products = []
+
+
+    use_appendix_for_all = any(
+        len(product["serials"]) >= 6
+        for product in products
+    )
+
 
     for product in products:
 
         serials = product["serials"]
 
-        # <= 5: show directly
-        if len(serials) <= 5:
-            serial_display = "\n".join(serials)
 
-        # >= 6: appendix
-        else:
-            serial_display = "Phụ lục đính kèm"
+        # ==========================================
+        # Có 1 model >= 6 serial
+        # => tất cả model xuống phụ lục
+        # ==========================================
+
+        if use_appendix_for_all:
+
+            serial_display = (
+                "Phụ lục đính kèm"
+            )
+
 
             appendix_products.append({
-                "product_name": product["product_name"],
-                "serial_rows": serial_to_rows(
-                    serials,
-                    columns=4
-                )
+                "product_name":
+                    product["product_name"],
+
+                "serial_rows":
+                    serial_to_rows(
+                        serials,
+                        columns=4
+                    )
             })
 
+
+        # ==========================================
+        # Không có model nào >= 6 serial
+        # => hiển thị trực tiếp trên CQ
+        # ==========================================
+
+        else:
+
+            serial_display = "\n".join(
+                serials
+            )
+
+
         document_products.append({
-            "product_name": product["product_name"],
-            "quantity": product["quantity"],
-            "origin": product["origin"],
-            "serial_display": serial_display
+            "product_name":
+                product["product_name"],
+
+            "quantity":
+                product["quantity"],
+
+            "origin":
+                product["origin"],
+
+            "serial_display":
+                serial_display
         })
 
 
-    # -------------------------
+    # =========================
     # CITY TEXT
-    # -------------------------
+    # =========================
 
     city_text = city
 
-    # Nếu muốn giống chính xác wording template
+
     if city == "TP.HCM":
         city_text = "Tp.HCM"
 
 
-    # -------------------------
+    # =========================
     # TEMPLATE DATA
-    # -------------------------
+    # =========================
 
     context = {
 
-        "city": city_text,
+        "city":
+            city_text,
 
-        "day": f"{issue_date.day:02d}",
+        "day":
+            f"{issue_date.day:02d}",
 
-        "month": f"{issue_date.month:02d}",
+        "month":
+            f"{issue_date.month:02d}",
 
-        "year": issue_date.year,
+        "year":
+            issue_date.year,
 
-        "eu_name": eu_name.upper(),
+        "eu_name":
+            eu_name.upper(),
 
-        "address": address,
+        "address":
+            address,
 
-        "products": document_products,
+        "products":
+            document_products,
 
-        "has_appendix": len(appendix_products) > 0,
+        "has_appendix":
+            use_appendix_for_all,
 
-        "appendix_products": appendix_products
+        "appendix_products":
+            appendix_products
     }
 
 
-    # -------------------------
+    # =========================
     # CREATE WORD
-    # -------------------------
+    # =========================
 
     try:
 
@@ -295,46 +509,81 @@ if st.button(
             "CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx"
         )
 
-        doc.render(context)
+
+        doc.render(
+            context
+        )
+
 
         output = BytesIO()
 
-        doc.save(output)
+
+        doc.save(
+            output
+        )
+
 
         output.seek(0)
 
-        # Clean filename
+
+        # =========================
+        # FILE NAME
+        # CQ_EU_YYYYMMDD.docx
+        # =========================
+
         safe_eu = re.sub(
             r'[\\/*?:"<>|]',
             "",
             eu_name
         )
 
-        safe_eu = safe_eu[:40]
+        safe_eu = safe_eu.strip()
+
 
         filename = (
-            f"CQ_SYSTEM_{safe_eu}_"
+            f"CQ_{safe_eu}_"
             f"{issue_date.strftime('%Y%m%d')}.docx"
         )
 
-        st.success("CQ đã được tạo thành công.")
+
+        # =========================
+        # DOWNLOAD
+        # =========================
+
+        st.success(
+            "CQ đã được tạo thành công."
+        )
+
 
         st.download_button(
             label="DOWNLOAD WORD",
             data=output,
             file_name=filename,
             mime=(
-                "application/vnd.openxmlformats-officedocument."
+                "application/"
+                "vnd.openxmlformats-officedocument."
                 "wordprocessingml.document"
             ),
             use_container_width=True
         )
 
+
+    # =========================
+    # TEMPLATE NOT FOUND
+    # =========================
+
     except FileNotFoundError:
 
         st.error(
-            "Không tìm thấy file CQ_SYSTEM_TEMPLATE.docx."
+            "Không tìm thấy file "
+            "CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx "
+            "trên GitHub."
         )
+
+
+    # =========================
+    # OTHER ERROR
+    # =========================
 
     except Exception as e:
 
