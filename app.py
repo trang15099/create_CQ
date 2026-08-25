@@ -87,7 +87,7 @@ col1, col2 = st.columns(2)
 with col1:
     city = st.selectbox(
         "Thành phố cấp CQ",
-        ["Hà Nội", "TP.HCM"]
+        ["TP.HCM","Hà Nội"]
     )
 
 with col2:
