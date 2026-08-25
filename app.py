@@ -2,6 +2,7 @@ import streamlit as st
 from docxtpl import DocxTemplate
 from datetime import date
 from io import BytesIO
+import pandas as pd
 import re
 
 
@@ -63,21 +64,7 @@ def serial_to_rows(serials, columns=4):
 
 
 # =========================
-# SESSION STATE
-# =========================
-
-if "product_table" not in st.session_state:
-    st.session_state.product_table = [
-        {
-            "Tên Sản Phẩm": "",
-            "Số lượng": 1,
-            "Xuất xứ (Double click nếu chọn Đài Loan)": "Trung Quốc"
-        }
-    ]
-
-
-# =========================
-# 1. GENERAL INFORMATION
+# 1. THÔNG TIN CQ
 # =========================
 
 st.subheader("1. Thông tin CQ")
@@ -87,7 +74,7 @@ col1, col2 = st.columns(2)
 with col1:
     city = st.selectbox(
         "Thành phố cấp CQ",
-        ["TP.HCM","Hà Nội"]
+        ["TP.HCM", "Hà Nội"]
     )
 
 with col2:
@@ -109,7 +96,7 @@ address = st.text_input(
 
 
 # =========================
-# 2. PRODUCT INFORMATION
+# 2. THÔNG TIN SẢN PHẨM
 # =========================
 
 st.divider()
@@ -121,25 +108,46 @@ st.caption(
 )
 
 
+# =========================
+# DEFAULT TABLE
+# =========================
+
+default_products = pd.DataFrame([
+    {
+        "Tên Sản Phẩm": "",
+        "Số lượng": 1,
+        "Xuất xứ": "Trung Quốc"
+    }
+])
+
+
+# =========================
+# DATA EDITOR
+# =========================
+
 product_table = st.data_editor(
-    st.session_state.product_table,
+    default_products,
     num_rows="dynamic",
     use_container_width=True,
     hide_index=True,
+
     column_config={
-        "Model name": st.column_config.TextColumn(
-            "Model name",
+
+        "Tên Sản Phẩm": st.column_config.TextColumn(
+            "Tên Sản Phẩm",
             width="large",
-            required=True,
-            help="Nhập tên đầy đủ của sản phẩm"
+            help=(
+                "Điền tên sản phẩm - "
+                "Ví dụ: Máy tính để bàn (ASUS)..."
+            )
         ),
 
         "Số lượng": st.column_config.NumberColumn(
             "Số lượng",
             min_value=1,
             step=1,
-            width="small",
-            required=True
+            default=1,
+            width="small"
         ),
 
         "Xuất xứ": st.column_config.SelectboxColumn(
@@ -149,48 +157,60 @@ product_table = st.data_editor(
                 "Đài Loan"
             ],
             default="Trung Quốc",
-            width="medium",
-            required=True
-        ),
+            width="medium"
+        )
     },
+
     key="product_editor"
 )
 
 
 # =========================
-# CLEAN PRODUCT ROWS
+# READ PRODUCT TABLE
 # =========================
 
 clean_rows = []
 
-for row in product_table:
+table_records = product_table.to_dict("records")
+
+
+for row in table_records:
 
     product_name = str(
-        row.get("Model name", "")
+        row.get("Tên Sản Phẩm", "")
     ).strip()
 
+
+    # Bỏ qua dòng trống
     if not product_name:
         continue
+
 
     quantity = row.get(
         "Số lượng",
         1
     )
 
-    if quantity is None:
+
+    if pd.isna(quantity):
         quantity = 1
+
 
     quantity = int(quantity)
 
-    origin = str(
-        row.get(
-            "Xuất xứ",
-            "Trung Quốc"
-        )
-    ).strip()
 
-    if not origin:
+    origin = row.get(
+        "Xuất xứ",
+        "Trung Quốc"
+    )
+
+
+    if pd.isna(origin) or not str(origin).strip():
         origin = "Trung Quốc"
+
+
+    origin = str(origin).strip()
+
 
     clean_rows.append({
         "product_name": product_name,
@@ -205,12 +225,14 @@ for row in product_table:
 
 products = []
 
+
 if clean_rows:
 
     st.markdown("### Serial Number")
 
     st.caption(
-        "Paste Serial Number riêng cho từng model. Mỗi dòng 1 Serial"
+        "Paste Serial Number riêng cho từng sản phẩm. "
+        "Mỗi dòng 1 Serial. "
         "Có thể copy trực tiếp từ Excel."
     )
 
@@ -221,22 +243,27 @@ if clean_rows:
             f"**{i + 1}. {row['product_name']}**"
         )
 
+
         serial_text = st.text_area(
-            "Serial Number",
+            f"Serial Number - Sản phẩm {i + 1}",
             key=f"serial_{i}",
             height=120,
+
             placeholder=(
                 "Ví dụ:\n"
                 "W3PFAC009325112\n"
                 "W4PFAC009720156\n"
                 "W4PFAC009736158"
             ),
+
             label_visibility="collapsed"
         )
+
 
         serials = parse_serials(
             serial_text
         )
+
 
         if serials:
 
@@ -246,10 +273,18 @@ if clean_rows:
 
 
         products.append({
-            "product_name": row["product_name"],
-            "quantity": row["quantity"],
-            "origin": row["origin"],
-            "serials": serials
+
+            "product_name":
+                row["product_name"],
+
+            "quantity":
+                row["quantity"],
+
+            "origin":
+                row["origin"],
+
+            "serials":
+                serials
         })
 
 
@@ -259,7 +294,7 @@ if clean_rows:
 else:
 
     st.info(
-        "Hãy nhập ít nhất 1 Model name "
+        "Hãy nhập ít nhất 1 Tên Sản Phẩm "
         "trong bảng để nhập Serial Number."
     )
 
@@ -267,6 +302,10 @@ else:
 # =========================
 # APPENDIX STATUS
 # =========================
+
+# RULE:
+# Chỉ cần 1 sản phẩm có >= 6 serial
+# => toàn bộ Serial của CQ xuống phụ lục
 
 use_appendix_for_all = any(
     len(product["serials"]) >= 6
@@ -277,7 +316,7 @@ use_appendix_for_all = any(
 if use_appendix_for_all:
 
     st.info(
-        "Có ít nhất 1 model từ 6 Serial Number trở lên. "
+        "Có ít nhất 1 sản phẩm từ 6 Serial Number trở lên. "
         "Toàn bộ Serial Number của CQ "
         "sẽ được đưa xuống phụ lục."
     )
@@ -296,8 +335,9 @@ if products:
         for product in products
     )
 
+
     st.caption(
-        f"{total_models} model(s) | "
+        f"{total_models} sản phẩm | "
         f"{total_serials} Serial Number"
     )
 
@@ -346,7 +386,7 @@ if st.button(
 
             errors.append(
                 f"Sản phẩm {index + 1}: "
-                "chưa nhập Model name."
+                "chưa nhập Tên Sản Phẩm."
             )
 
 
@@ -356,22 +396,6 @@ if st.button(
                 f"Sản phẩm {index + 1}: "
                 "chưa chọn Xuất xứ."
             )
-
-
-        # ==========================================
-        # OPTIONAL:
-        # Bật đoạn dưới nếu muốn bắt buộc:
-        # Số lượng = số Serial
-        # ==========================================
-
-        # if len(product["serials"]) != product["quantity"]:
-        #
-        #     errors.append(
-        #         f"Sản phẩm {index + 1}: "
-        #         f"Số lượng ({product['quantity']}) "
-        #         f"không khớp số Serial "
-        #         f"({len(product['serials'])})."
-        #     )
 
 
     if errors:
@@ -403,8 +427,8 @@ if st.button(
 
 
         # ==========================================
-        # Có 1 model >= 6 serial
-        # => tất cả model xuống phụ lục
+        # Có 1 sản phẩm >= 6 serial
+        # => tất cả sản phẩm xuống phụ lục
         # ==========================================
 
         if use_appendix_for_all:
@@ -415,6 +439,7 @@ if st.button(
 
 
             appendix_products.append({
+
                 "product_name":
                     product["product_name"],
 
@@ -427,7 +452,7 @@ if st.button(
 
 
         # ==========================================
-        # Không có model nào >= 6 serial
+        # Tất cả sản phẩm <= 5 serial
         # => hiển thị trực tiếp trên CQ
         # ==========================================
 
@@ -439,6 +464,7 @@ if st.button(
 
 
         document_products.append({
+
             "product_name":
                 product["product_name"],
 
@@ -537,6 +563,7 @@ if st.button(
             eu_name
         )
 
+
         safe_eu = safe_eu.strip()
 
 
@@ -559,11 +586,13 @@ if st.button(
             label="DOWNLOAD WORD",
             data=output,
             file_name=filename,
+
             mime=(
                 "application/"
                 "vnd.openxmlformats-officedocument."
                 "wordprocessingml.document"
             ),
+
             use_container_width=True
         )
 
