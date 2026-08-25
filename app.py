@@ -89,7 +89,7 @@ st.divider()
 st.subheader("2. Thông tin sản phẩm")
 
 product_count = st.number_input(
-    "Số loại sản phẩm",
+    "Models",
     min_value=1,
     max_value=20,
     value=1,
@@ -106,10 +106,10 @@ for i in range(product_count):
     ):
 
         product_name = st.text_area(
-            "Tên sản phẩm",
+            "Model name",
             key=f"product_name_{i}",
             height=100,
-            placeholder="Ví dụ: MÁY TÍNH ĐỂ BÀN (PC) ASUS..."
+            placeholder="Nhập tên sản phẩm - Ví dụ: MÁY TÍNH ĐỂ BÀN (PC) ASUS..."
         )
 
         col1, col2 = st.columns(2)
