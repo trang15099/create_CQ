@@ -104,7 +104,7 @@ st.divider()
 st.subheader("2. Thông tin sản phẩm")
 
 st.caption(
-    "Thêm/xóa dòng trực tiếp trong bảng bên dưới."
+    "Thêm/xóa dòng trực tiếp trong bảng bên dưới. Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô."
 )
 
 
