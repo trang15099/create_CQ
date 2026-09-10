@@ -144,10 +144,15 @@ st.divider()
 
 st.subheader("3. Thông tin sản phẩm")
 
-st.caption(
-    "Thêm/xóa dòng trực tiếp trong bảng bên dưới. "
-    "Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô.\n"
-     "CQ không cần điền mã hàng, chỉ cần tên Hóa đơn."
+st.markdown(
+    """
+    <small>
+    Thêm/xóa dòng trực tiếp trong bảng bên dưới.<br>
+    Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô.<br><br>
+    CQ không cần điền mã hàng, chỉ cần tên Hóa đơn.
+    </small>
+    """,
+    unsafe_allow_html=True
 )
 
 
