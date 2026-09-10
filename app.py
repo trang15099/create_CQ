@@ -147,8 +147,8 @@ st.subheader("3. Thông tin sản phẩm")
 st.markdown(
     """
     <small>
-    Thêm/xóa dòng trực tiếp trong bảng bên dưới.<br>
-    Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô.<br><br>
+    Thêm/xóa dòng trực tiếp trong bảng bên dưới.
+    Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô.<br>
     CQ không cần điền mã hàng, chỉ cần tên Hóa đơn.
     </small>
     """,
