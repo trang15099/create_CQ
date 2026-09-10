@@ -4,6 +4,7 @@ from datetime import date
 from io import BytesIO
 import pandas as pd
 import re
+import os
 
 
 # =========================
@@ -16,7 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Tạo CQ - ASUS")
+st.title("Tạo CQ")
 
 
 # =========================
@@ -64,20 +65,37 @@ def serial_to_rows(serials, columns=4):
 
 
 # =========================
-# 1. THÔNG TIN CQ
+# 1. CHỌN LOẠI FORM
 # =========================
 
-st.subheader("1. Thông tin CQ")
+st.subheader("1. Loại CQ")
+
+form_type = st.radio(
+    "Chọn Form",
+    ["ASUS", "DGW"],
+    horizontal=True
+)
+
+
+# =========================
+# 2. THÔNG TIN CQ
+# =========================
+
+st.divider()
+
+st.subheader("2. Thông tin CQ")
 
 col1, col2 = st.columns(2)
 
 with col1:
+
     city = st.selectbox(
         "Thành phố cấp CQ",
         ["TP.HCM", "Hà Nội"]
     )
 
 with col2:
+
     issue_date = st.date_input(
         "Ngày cấp CQ",
         value=date.today()
@@ -96,15 +114,39 @@ address = st.text_input(
 
 
 # =========================
-# 2. THÔNG TIN SẢN PHẨM
+# HIỂN THỊ TEMPLATE ĐANG CHỌN
+# =========================
+
+if form_type == "ASUS":
+
+    st.caption(
+        "Form đang chọn: ASUS"
+    )
+
+elif city == "Hà Nội":
+
+    st.caption(
+        "Form đang chọn: DGW - Hà Nội"
+    )
+
+else:
+
+    st.caption(
+        "Form đang chọn: DGW - TP.HCM"
+    )
+
+
+# =========================
+# 3. THÔNG TIN SẢN PHẨM
 # =========================
 
 st.divider()
 
-st.subheader("2. Thông tin sản phẩm")
+st.subheader("3. Thông tin sản phẩm")
 
 st.caption(
-    "Thêm/xóa dòng trực tiếp trong bảng bên dưới. Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô."
+    "Thêm/xóa dòng trực tiếp trong bảng bên dưới. "
+    "Nếu copy paste lưu ý xóa lỗi xuống dòng trong từng ô."
 )
 
 
@@ -304,6 +346,7 @@ else:
 # =========================
 
 # RULE:
+#
 # Chỉ cần 1 sản phẩm có >= 6 serial
 # => toàn bộ Serial của CQ xuống phụ lục
 
@@ -363,18 +406,21 @@ if st.button(
 
 
     if not eu_name.strip():
+
         errors.append(
             "Chưa nhập Tên EU."
         )
 
 
     if not address.strip():
+
         errors.append(
             "Chưa nhập Địa chỉ."
         )
 
 
     if not products:
+
         errors.append(
             "Chưa nhập thông tin sản phẩm."
         )
@@ -407,13 +453,16 @@ if st.button(
 
 
     # =========================
-    # PROCESS DATA
+    # PROCESS SERIAL DATA
     # =========================
 
     document_products = []
 
     appendix_products = []
 
+
+    # Chỉ cần 1 model >= 6 serial
+    # => tất cả model xuống phụ lục
 
     use_appendix_for_all = any(
         len(product["serials"]) >= 6
@@ -427,8 +476,8 @@ if st.button(
 
 
         # ==========================================
-        # Có 1 sản phẩm >= 6 serial
-        # => tất cả sản phẩm xuống phụ lục
+        # CASE 1:
+        # Có ít nhất 1 sản phẩm >= 6 serial
         # ==========================================
 
         if use_appendix_for_all:
@@ -452,8 +501,8 @@ if st.button(
 
 
         # ==========================================
+        # CASE 2:
         # Tất cả sản phẩm <= 5 serial
-        # => hiển thị trực tiếp trên CQ
         # ==========================================
 
         else:
@@ -488,6 +537,37 @@ if st.button(
 
     if city == "TP.HCM":
         city_text = "Tp.HCM"
+
+
+    # =========================
+    # SELECT TEMPLATE
+    # =========================
+
+    if form_type == "ASUS":
+
+        template_file = (
+            "CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx"
+        )
+
+        file_prefix = "CQ_ASUS"
+
+
+    elif form_type == "DGW" and city == "Hà Nội":
+
+        template_file = (
+            "CQ_DGW_TEMPLATE_HN_FIXED.docx"
+        )
+
+        file_prefix = "CQ_DGW_HN"
+
+
+    else:
+
+        template_file = (
+            "CQ_DGW_TEMPLATE_HCM_FIXED.docx"
+        )
+
+        file_prefix = "CQ_DGW_HCM"
 
 
     # =========================
@@ -531,8 +611,18 @@ if st.button(
 
     try:
 
+        # Kiểm tra template trước
+        if not os.path.exists(template_file):
+
+            st.error(
+                f"Không tìm thấy template: {template_file}"
+            )
+
+            st.stop()
+
+
         doc = DocxTemplate(
-            "CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx"
+            template_file
         )
 
 
@@ -554,7 +644,6 @@ if st.button(
 
         # =========================
         # FILE NAME
-        # CQ_EU_YYYYMMDD.docx
         # =========================
 
         safe_eu = re.sub(
@@ -568,7 +657,8 @@ if st.button(
 
 
         filename = (
-            f"CQ_{safe_eu}_"
+            f"{file_prefix}_"
+            f"{safe_eu}_"
             f"{issue_date.strftime('%Y%m%d')}.docx"
         )
 
@@ -604,9 +694,8 @@ if st.button(
     except FileNotFoundError:
 
         st.error(
-            "Không tìm thấy file "
-            "CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx "
-            "trên GitHub."
+            f"Không tìm thấy file template: "
+            f"{template_file}"
         )
 
 
