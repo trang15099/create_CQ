@@ -345,7 +345,50 @@ else:
         "Hãy nhập ít nhất 1 Tên Sản Phẩm "
         "trong bảng để nhập Serial Number."
     )
+# =========================
+# CHECK DUPLICATE SERIAL
+# =========================
 
+serial_locations = {}
+
+for product_index, product in enumerate(products):
+
+    for serial in product["serials"]:
+
+        # Chuẩn hóa để tránh SN001 và sn001 bị coi là khác nhau
+        serial_key = serial.strip().upper()
+
+        if serial_key not in serial_locations:
+            serial_locations[serial_key] = []
+
+        serial_locations[serial_key].append(
+            product["product_name"]
+        )
+
+
+# Lấy các serial xuất hiện > 1 lần
+duplicate_serials = {
+    serial: product_names
+    for serial, product_names in serial_locations.items()
+    if len(product_names) > 1
+}
+
+
+# Hiển thị cảnh báo
+if duplicate_serials:
+
+    st.error(
+        f"⚠️ Phát hiện {len(duplicate_serials)} "
+        "Serial Number bị trùng. "
+        "Vui lòng kiểm tra lại trước khi tạo CQ."
+    )
+
+    for serial, product_names in duplicate_serials.items():
+
+        st.markdown(
+            f"🔴 **{serial}** — xuất hiện "
+            f"{len(product_names)} lần"
+        )
 
 # =========================
 # APPENDIX STATUS
