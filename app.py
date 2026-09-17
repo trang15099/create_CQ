@@ -63,6 +63,15 @@ def serial_to_rows(serials, columns=4):
 
     return rows
 
+# =========================
+# NGƯỜI TẠO CQ
+# =========================
+
+creator_name = st.text_input(
+    "KD yêu cầu",
+    placeholder="Nhập tên người tạo CQ",
+    help="Thông tin này sẽ được lưu vào file Tracking CQ."
+)
 
 # =========================
 # 1. CHỌN LOẠI FORM
