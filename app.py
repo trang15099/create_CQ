@@ -70,6 +70,7 @@ def serial_to_rows(serials, columns=4):
 creator_name = st.text_input(
     "KD yêu cầu",
     placeholder="Nhập tên người tạo CQ",
+)
 
 need_sa_check = st.checkbox(
     "Cần SA check",
