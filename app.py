@@ -70,13 +70,13 @@ def serial_to_rows(serials, columns=4):
 creator_name = st.text_input(
     "KD yêu cầu",
     placeholder="Nhập tên người tạo CQ",
-    help="Thông tin này sẽ được lưu vào file Tracking CQ."
-)
 
 need_sa_check = st.checkbox(
     "Cần SA check",
     value=False,
-    help="Tick nếu CQ cần SA kiểm tra/cấp CQ. CQ sẽ được thêm vào file Tracking."
+
+st.caption(
+    "Tick nếu CQ cần SA kiểm tra/cấp CQ. CQ sẽ được thêm vào file Tracking."
 )
 
 # =========================
