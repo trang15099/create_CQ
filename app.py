@@ -73,7 +73,8 @@ creator_name = st.text_input(
 
 need_sa_check = st.checkbox(
     "Cần SA check",
-    value=False,
+    value=False
+)
 
 st.caption(
     "Tick nếu CQ cần SA kiểm tra/cấp CQ. CQ sẽ được thêm vào file Tracking."
