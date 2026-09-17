@@ -73,6 +73,12 @@ creator_name = st.text_input(
     help="Thông tin này sẽ được lưu vào file Tracking CQ."
 )
 
+need_sa_check = st.checkbox(
+    "Cần SA check",
+    value=False,
+    help="Tick nếu CQ cần SA kiểm tra/cấp CQ. CQ sẽ được thêm vào file Tracking."
+)
+
 # =========================
 # 1. CHỌN LOẠI FORM
 # =========================
