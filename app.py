@@ -6,6 +6,8 @@ import pandas as pd
 import re
 import os
 
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 # =========================
 # PAGE CONFIG
@@ -19,6 +21,66 @@ st.set_page_config(
 
 st.title("Tạo CQ")
 
+# =========================
+# GOOGLE CONNECTION TEST
+# =========================
+
+def get_google_services():
+
+    credentials = service_account.Credentials.from_service_account_info(
+        dict(st.secrets["gcp_service_account"]),
+        scopes=[
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/spreadsheets"
+        ]
+    )
+
+    drive_service = build(
+        "drive",
+        "v3",
+        credentials=credentials
+    )
+
+    sheets_service = build(
+        "sheets",
+        "v4",
+        credentials=credentials
+    )
+
+    return drive_service, sheets_service
+
+
+if st.button("TEST GOOGLE CONNECTION"):
+
+    try:
+
+        drive_service, sheets_service = get_google_services()
+
+        folder_id = st.secrets["google"]["drive_folder_id"]
+        sheet_id = st.secrets["google"]["sheet_id"]
+
+        # Test quyền truy cập folder CQ GENERATED
+        folder = drive_service.files().get(
+            fileId=folder_id,
+            fields="id,name"
+        ).execute()
+
+        # Test quyền truy cập CQ TRACKING
+        spreadsheet = sheets_service.spreadsheets().get(
+            spreadsheetId=sheet_id
+        ).execute()
+
+        st.success(
+            f"Google kết nối thành công ✅\n\n"
+            f"Drive folder: {folder['name']}\n\n"
+            f"Google Sheet: {spreadsheet['properties']['title']}"
+        )
+
+    except Exception as e:
+
+        st.error(
+            f"Google connection error: {str(e)}"
+        )
 
 # =========================
 # FUNCTIONS
