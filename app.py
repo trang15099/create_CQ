@@ -22,7 +22,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Tạo CQ")
+st.title("Tạo CQ - Xác nhận hàng hóa")
 
 
 # =========================
@@ -386,14 +386,14 @@ creator_name = st.text_input(
 # =========================
 
 st.subheader(
-    "1. Loại CQ"
+    "1. Chọn form chứng từ"
 )
 
 form_type = st.radio(
     "Chọn Form",
     [
-        "ASUS",
-        "DGW"
+        "CQ ASUS",
+        "CQ DGW"
     ],
     horizontal=True
 )
@@ -448,22 +448,22 @@ address = st.text_input(
 # TEMPLATE STATUS
 # =========================
 
-if form_type == "ASUS":
+if form_type == "CQ ASUS":
 
     st.caption(
-        "Form đang chọn: ASUS"
+        "Form đang chọn: CQ ASUS"
     )
 
 elif city == "Hà Nội":
 
     st.caption(
-        "Form đang chọn: DGW - Hà Nội"
+        "Form đang chọn: CQ DGW - Hà Nội"
     )
 
 else:
 
     st.caption(
-        "Form đang chọn: DGW - TP.HCM"
+        "Form đang chọn: CQ DGW - TP.HCM"
     )
 
 
