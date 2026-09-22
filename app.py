@@ -7,6 +7,7 @@ import re
 import os
 
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
@@ -28,29 +29,55 @@ st.title("Tạo CQ")
 # GOOGLE SERVICES
 # =========================
 
-def get_google_services():
+def get_drive_service():
+    """
+    Google Drive dùng OAuth của tài khoản Google thật.
+    File upload sẽ sử dụng quota My Drive của tài khoản này.
+    """
 
-    credentials = service_account.Credentials.from_service_account_info(
-        dict(st.secrets["gcp_service_account"]),
+    credentials = Credentials(
+        token=None,
+        refresh_token=st.secrets["google_oauth"]["refresh_token"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=st.secrets["google_oauth"]["client_id"],
+        client_secret=st.secrets["google_oauth"]["client_secret"],
         scopes=[
-            "https://www.googleapis.com/auth/drive",
-            "https://www.googleapis.com/auth/spreadsheets"
+            "https://www.googleapis.com/auth/drive"
         ]
     )
 
-    drive_service = build(
+    return build(
         "drive",
         "v3",
         credentials=credentials
     )
 
-    sheets_service = build(
+
+def get_sheets_service():
+    """
+    Google Sheet vẫn dùng Service Account.
+    """
+
+    credentials = (
+        service_account
+        .Credentials
+        .from_service_account_info(
+            dict(
+                st.secrets[
+                    "gcp_service_account"
+                ]
+            ),
+            scopes=[
+                "https://www.googleapis.com/auth/spreadsheets"
+            ]
+        )
+    )
+
+    return build(
         "sheets",
         "v4",
         credentials=credentials
     )
-
-    return drive_service, sheets_service
 
 
 # =========================
@@ -76,40 +103,41 @@ def find_or_create_folder(
         f"and trashed = false"
     )
 
-    result = drive_service.files().list(
-        q=query,
-        spaces="drive",
-        fields="files(id,name)"
-    ).execute()
+    result = (
+        drive_service
+        .files()
+        .list(
+            q=query,
+            spaces="drive",
+            fields="files(id,name)"
+        )
+        .execute()
+    )
 
     folders = result.get(
         "files",
         []
     )
 
-    # Folder đã tồn tại
     if folders:
-
         return folders[0]["id"]
 
-
-    # Folder chưa tồn tại -> tạo mới
     folder_metadata = {
-
-        "name":
-            folder_name,
-
+        "name": folder_name,
         "mimeType":
             "application/vnd.google-apps.folder",
-
-        "parents":
-            [parent_id]
+        "parents": [parent_id]
     }
 
-    folder = drive_service.files().create(
-        body=folder_metadata,
-        fields="id"
-    ).execute()
+    folder = (
+        drive_service
+        .files()
+        .create(
+            body=folder_metadata,
+            fields="id"
+        )
+        .execute()
+    )
 
     return folder["id"]
 
@@ -121,69 +149,50 @@ def upload_cq_to_drive(
     issue_date
 ):
 
-    # ID của folder CQ GENERATED
+    # Đây PHẢI là ID folder CQ GENERATED
     root_folder_id = (
         st.secrets["google"]["drive_folder_id"]
     )
 
-
-    # =========================
-    # YEAR FOLDER
-    # CQ GENERATED / 2026
-    # =========================
-
+    # CQ GENERATED / YYYY
     year_folder_id = find_or_create_folder(
         drive_service,
         root_folder_id,
         str(issue_date.year)
     )
 
-
-    # =========================
-    # MONTH FOLDER
-    # CQ GENERATED / 2026 / Tháng 09
-    # =========================
-
+    # CQ GENERATED / YYYY / Tháng MM
     month_folder_id = find_or_create_folder(
         drive_service,
         year_folder_id,
         f"Tháng {issue_date.month:02d}"
     )
 
-
-    # =========================
-    # UPLOAD WORD
-    # =========================
-
     media = MediaIoBaseUpload(
         BytesIO(word_bytes),
-
         mimetype=(
             "application/"
             "vnd.openxmlformats-officedocument."
             "wordprocessingml.document"
         ),
-
         resumable=False
     )
 
-
     file_metadata = {
-
-        "name":
-            filename,
-
-        "parents":
-            [month_folder_id]
+        "name": filename,
+        "parents": [month_folder_id]
     }
 
-
-    uploaded_file = drive_service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields="id,name,webViewLink"
-    ).execute()
-
+    uploaded_file = (
+        drive_service
+        .files()
+        .create(
+            body=file_metadata,
+            media_body=media,
+            fields="id,name,webViewLink"
+        )
+        .execute()
+    )
 
     return uploaded_file["webViewLink"]
 
@@ -212,7 +221,6 @@ def append_tracking_row(
         st.secrets["google"]["sheet_name"]
     )
 
-
     # =========================
     # NEXT STT
     # =========================
@@ -228,22 +236,18 @@ def append_tracking_row(
         .execute()
     )
 
-
     existing_rows = result.get(
         "values",
         []
     )
 
-
     stt = len(existing_rows) + 1
-
 
     # =========================
     # PRODUCT SUMMARY
     # =========================
 
     product_summary = "\n".join(
-
         [
             (
                 f"{i + 1}. "
@@ -251,19 +255,16 @@ def append_tracking_row(
                 f"| SL: {product['quantity']} "
                 f"| {product['origin']}"
             )
-
             for i, product
             in enumerate(products)
         ]
     )
-
 
     # =========================
     # TRACKING ROW A:L
     # =========================
 
     row = [
-
         stt,
         # A - STT
 
@@ -307,29 +308,15 @@ def append_tracking_row(
         # L - Sản phẩm
     ]
 
-
-    # =========================
-    # APPEND TO SHEET
-    # =========================
-
     (
         sheets_service
         .spreadsheets()
         .values()
         .append(
-
-            spreadsheetId=
-                sheet_id,
-
-            range=
-                f"'{sheet_name}'!A:L",
-
-            valueInputOption=
-                "USER_ENTERED",
-
-            insertDataOption=
-                "INSERT_ROWS",
-
+            spreadsheetId=sheet_id,
+            range=f"'{sheet_name}'!A:L",
+            valueInputOption="USER_ENTERED",
+            insertDataOption="INSERT_ROWS",
             body={
                 "values": [row]
             }
@@ -422,9 +409,7 @@ st.subheader(
     "2. Thông tin CQ"
 )
 
-
 col1, col2 = st.columns(2)
-
 
 with col1:
 
@@ -435,7 +420,6 @@ with col1:
             "Hà Nội"
         ]
     )
-
 
 with col2:
 
@@ -451,7 +435,6 @@ eu_name = st.text_input(
         "BAN QUẢN LÝ DỰ ÁN..."
     )
 )
-
 
 address = st.text_input(
     "Địa chỉ",
@@ -471,13 +454,11 @@ if form_type == "ASUS":
         "Form đang chọn: ASUS"
     )
 
-
 elif city == "Hà Nội":
 
     st.caption(
         "Form đang chọn: DGW - Hà Nội"
     )
-
 
 else:
 
@@ -495,7 +476,6 @@ st.divider()
 st.subheader(
     "3. Thông tin sản phẩm"
 )
-
 
 st.markdown(
     """
@@ -516,14 +496,9 @@ st.markdown(
 default_products = pd.DataFrame(
     [
         {
-            "Tên Sản Phẩm":
-                "",
-
-            "Số lượng":
-                1,
-
-            "Xuất xứ":
-                "Trung Quốc"
+            "Tên Sản Phẩm": "",
+            "Số lượng": 1,
+            "Xuất xứ": "Trung Quốc"
         }
     ]
 )
@@ -534,25 +509,17 @@ default_products = pd.DataFrame(
 # =========================
 
 product_table = st.data_editor(
-
     default_products,
-
     num_rows="dynamic",
-
     use_container_width=True,
-
     hide_index=True,
-
 
     column_config={
 
         "Tên Sản Phẩm":
             st.column_config.TextColumn(
-
                 "Tên Sản Phẩm",
-
                 width="large",
-
                 help=(
                     "Điền tên sản phẩm - "
                     "Ví dụ: Máy tính để bàn "
@@ -560,35 +527,23 @@ product_table = st.data_editor(
                 )
             ),
 
-
         "Số lượng":
             st.column_config.NumberColumn(
-
                 "Số lượng",
-
                 min_value=1,
-
                 step=1,
-
                 default=1,
-
                 width="small"
             ),
 
-
         "Xuất xứ":
             st.column_config.SelectboxColumn(
-
                 "Xuất xứ",
-
                 options=[
                     "Trung Quốc",
                     "Đài Loan"
                 ],
-
-                default=
-                    "Trung Quốc",
-
+                default="Trung Quốc",
                 width="medium"
             )
     },
@@ -608,7 +563,6 @@ table_records = (
     .to_dict("records")
 )
 
-
 for row in table_records:
 
     product_name = str(
@@ -618,49 +572,38 @@ for row in table_records:
         )
     ).strip()
 
-
-    # Bỏ dòng trống
     if not product_name:
         continue
-
 
     quantity = row.get(
         "Số lượng",
         1
     )
 
-
     if pd.isna(quantity):
         quantity = 1
-
 
     quantity = int(
         quantity
     )
-
 
     origin = row.get(
         "Xuất xứ",
         "Trung Quốc"
     )
 
-
     if (
         pd.isna(origin)
         or not str(origin).strip()
     ):
-
         origin = "Trung Quốc"
-
 
     origin = str(
         origin
     ).strip()
 
-
     clean_rows.append(
         {
-
             "product_name":
                 product_name,
 
@@ -679,20 +622,17 @@ for row in table_records:
 
 products = []
 
-
 if clean_rows:
 
     st.markdown(
         "### Serial Number"
     )
 
-
     st.caption(
         "Paste Serial Number riêng cho từng sản phẩm. "
         "Mỗi dòng 1 Serial. "
         "Có thể copy trực tiếp từ Excel."
     )
-
 
     for i, row in enumerate(
         clean_rows
@@ -703,34 +643,25 @@ if clean_rows:
             f"{row['product_name']}**"
         )
 
-
         serial_text = st.text_area(
-
             (
                 f"Serial Number - "
                 f"Sản phẩm {i + 1}"
             ),
-
             key=f"serial_{i}",
-
             height=120,
-
             placeholder=(
                 "Ví dụ:\n"
                 "W3PFAC009325112\n"
                 "W4PFAC009720156\n"
                 "W4PFAC009736158"
             ),
-
-            label_visibility=
-                "collapsed"
+            label_visibility="collapsed"
         )
-
 
         serials = parse_serials(
             serial_text
         )
-
 
         if serials:
 
@@ -740,10 +671,8 @@ if clean_rows:
                 f"Serial Number"
             )
 
-
         products.append(
             {
-
                 "product_name":
                     row[
                         "product_name"
@@ -764,9 +693,7 @@ if clean_rows:
             }
         )
 
-
         st.write("")
-
 
 else:
 
@@ -783,7 +710,6 @@ else:
 
 serial_locations = {}
 
-
 for product in products:
 
     for serial in product[
@@ -796,16 +722,13 @@ for product in products:
             .upper()
         )
 
-
         if (
             serial_key
             not in serial_locations
         ):
-
             serial_locations[
                 serial_key
             ] = []
-
 
         serial_locations[
             serial_key
@@ -817,7 +740,6 @@ for product in products:
 
 
 duplicate_serials = {
-
     serial:
         product_names
 
@@ -838,7 +760,6 @@ if duplicate_serials:
         f"trước khi tạo CQ."
     )
 
-
     for (
         serial,
         product_names
@@ -856,12 +777,9 @@ if duplicate_serials:
 # =========================
 
 use_appendix_for_all = any(
-
     len(product["serials"]) >= 6
-
     for product in products
 )
-
 
 if use_appendix_for_all:
 
@@ -883,17 +801,13 @@ if products:
         products
     )
 
-
     total_serials = sum(
-
         len(
             product["serials"]
         )
-
         for product
         in products
     )
-
 
     st.caption(
         f"{total_models} sản phẩm | "
@@ -909,18 +823,13 @@ st.divider()
 
 
 if st.button(
-
     "GENERATE CQ",
-
     type="primary",
-
     use_container_width=True,
-
     disabled=bool(
         duplicate_serials
     )
 ):
-
 
     # =========================
     # VALIDATION
@@ -928,13 +837,11 @@ if st.button(
 
     errors = []
 
-
     if not eu_name.strip():
 
         errors.append(
             "Chưa nhập Tên EU."
         )
-
 
     if not address.strip():
 
@@ -942,13 +849,11 @@ if st.button(
             "Chưa nhập Địa chỉ."
         )
 
-
     if not products:
 
         errors.append(
             "Chưa nhập thông tin sản phẩm."
         )
-
 
     for index, product in enumerate(
         products
@@ -963,7 +868,6 @@ if st.button(
                 f"chưa nhập Tên Sản Phẩm."
             )
 
-
         if not product[
             "origin"
         ].strip():
@@ -972,7 +876,6 @@ if st.button(
                 f"Sản phẩm {index + 1}: "
                 f"chưa chọn Xuất xứ."
             )
-
 
     if errors:
 
@@ -993,17 +896,13 @@ if st.button(
 
     appendix_products = []
 
-
     use_appendix_for_all = any(
-
         len(
             product["serials"]
         ) >= 6
-
         for product
         in products
     )
-
 
     for product in products:
 
@@ -1011,17 +910,14 @@ if st.button(
             "serials"
         ]
 
-
         if use_appendix_for_all:
 
             serial_display = (
                 "Phụ lục đính kèm"
             )
 
-
             appendix_products.append(
                 {
-
                     "product_name":
                         product[
                             "product_name"
@@ -1035,7 +931,6 @@ if st.button(
                 }
             )
 
-
         else:
 
             serial_display = (
@@ -1044,10 +939,8 @@ if st.button(
                 )
             )
 
-
         document_products.append(
             {
-
                 "product_name":
                     product[
                         "product_name"
@@ -1075,7 +968,6 @@ if st.button(
 
     city_text = city
 
-
     if city == "TP.HCM":
 
         city_text = "Tp.HCM"
@@ -1095,7 +987,6 @@ if st.button(
             "CQ_ASUS"
         )
 
-
     elif (
         form_type == "DGW"
         and city == "Hà Nội"
@@ -1108,7 +999,6 @@ if st.button(
         file_prefix = (
             "CQ_DGW_HN"
         )
-
 
     else:
 
@@ -1126,7 +1016,6 @@ if st.button(
     # =========================
 
     context = {
-
         "city":
             city_text,
 
@@ -1173,24 +1062,19 @@ if st.button(
 
             st.stop()
 
-
         doc = DocxTemplate(
             template_file
         )
-
 
         doc.render(
             context
         )
 
-
         output = BytesIO()
-
 
         doc.save(
             output
         )
-
 
         output.seek(0)
 
@@ -1205,11 +1089,9 @@ if st.button(
             eu_name
         )
 
-
         safe_eu = (
             safe_eu.strip()
         )
-
 
         filename = (
             f"{file_prefix}_"
@@ -1234,16 +1116,23 @@ if st.button(
 
         try:
 
-            (
-                drive_service,
-                sheets_service
-            ) = get_google_services()
+            # Drive dùng OAuth
+            drive_service = (
+                get_drive_service()
+            )
+
+            # Sheet dùng Service Account
+            sheets_service = (
+                get_sheets_service()
+            )
 
 
-            # Upload Word lên Drive
+            # =========================
+            # UPLOAD WORD TO DRIVE
+            # =========================
+
             drive_link = (
                 upload_cq_to_drive(
-
                     drive_service=
                         drive_service,
 
@@ -1259,9 +1148,11 @@ if st.button(
             )
 
 
-            # Add CQ vào Tracking
-            append_tracking_row(
+            # =========================
+            # ADD TO CQ TRACKING
+            # =========================
 
+            append_tracking_row(
                 sheets_service=
                     sheets_service,
 
@@ -1321,13 +1212,11 @@ if st.button(
                 ]
             )
 
-
             tracking_link = (
                 "https://docs.google.com/"
                 "spreadsheets/d/"
                 f"{sheet_id}/edit"
             )
-
 
             st.link_button(
                 "MỞ CQ TRACKING",
@@ -1344,7 +1233,6 @@ if st.button(
                 "Google Drive / CQ TRACKING."
             )
 
-
             st.error(
                 f"Google error: "
                 f"{str(google_error)}"
@@ -1356,19 +1244,14 @@ if st.button(
         # =========================
 
         st.download_button(
-
             label="DOWNLOAD WORD",
-
             data=word_bytes,
-
             file_name=filename,
-
             mime=(
                 "application/"
                 "vnd.openxmlformats-officedocument."
                 "wordprocessingml.document"
             ),
-
             use_container_width=True
         )
 
@@ -1379,7 +1262,6 @@ if st.button(
             f"Không tìm thấy file template: "
             f"{template_file}"
         )
-
 
     except Exception as e:
 
