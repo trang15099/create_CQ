@@ -1,6 +1,6 @@
 import streamlit as st
 from docxtpl import DocxTemplate
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 import pandas as pd
 import re
@@ -17,7 +17,7 @@ from googleapiclient.http import MediaIoBaseUpload
 # =========================
 
 st.set_page_config(
-    page_title="CQ Generator",
+    page_title="Document Generator",
     page_icon="📄",
     layout="wide"
 )
@@ -26,14 +26,21 @@ st.title("Tạo CQ - Xác nhận hàng hóa")
 
 
 # =========================
+# SESSION STATE
+# =========================
+
+if "generated_cq" not in st.session_state:
+    st.session_state.generated_cq = None
+
+if "tracking_submitted" not in st.session_state:
+    st.session_state.tracking_submitted = False
+
+
+# =========================
 # GOOGLE SERVICES
 # =========================
 
 def get_drive_service():
-    """
-    Google Drive dùng OAuth của tài khoản Google thật.
-    File upload sẽ sử dụng quota My Drive của tài khoản này.
-    """
 
     credentials = Credentials(
         token=None,
@@ -54,9 +61,6 @@ def get_drive_service():
 
 
 def get_sheets_service():
-    """
-    Google Sheet vẫn dùng Service Account.
-    """
 
     credentials = (
         service_account
@@ -149,19 +153,16 @@ def upload_cq_to_drive(
     issue_date
 ):
 
-    # Đây PHẢI là ID folder CQ GENERATED
     root_folder_id = (
         st.secrets["google"]["drive_folder_id"]
     )
 
-    # CQ GENERATED / YYYY
     year_folder_id = find_or_create_folder(
         drive_service,
         root_folder_id,
         str(issue_date.year)
     )
 
-    # CQ GENERATED / YYYY / Tháng MM
     month_folder_id = find_or_create_folder(
         drive_service,
         year_folder_id,
@@ -243,6 +244,7 @@ def append_tracking_row(
 
     stt = len(existing_rows) + 1
 
+
     # =========================
     # PRODUCT SUMMARY
     # =========================
@@ -260,6 +262,16 @@ def append_tracking_row(
         ]
     )
 
+
+    # =========================
+    # REQUEST TIME
+    # =========================
+
+    request_time = datetime.now().strftime(
+        "%d/%m/%Y %H:%M:%S"
+    )
+
+
     # =========================
     # TRACKING ROW A:L
     # =========================
@@ -271,10 +283,10 @@ def append_tracking_row(
         creator_name.strip(),
         # B - KD yêu cầu
 
-        False,
+        True,
         # C - Đẩy SA check
 
-        "",
+        request_time,
         # D - Request time
 
         "",
@@ -377,16 +389,20 @@ def serial_to_rows(
 
 creator_name = st.text_input(
     "KD yêu cầu",
-    placeholder="Nhập tên KD yêu cầu CQ"
+    placeholder="Nhập tên KD yêu cầu"
+)
+
+send_sa_check = st.checkbox(
+    "Đẩy SA check"
 )
 
 
 # =========================
-# 1. CHỌN LOẠI FORM
+# 1. CHỌN FORM
 # =========================
 
 st.subheader(
-    "1. Chọn form chứng từ"
+    "1. Chọn form"
 )
 
 form_type = st.radio(
@@ -454,13 +470,19 @@ if form_type == "CQ ASUS":
         "Form đang chọn: CQ ASUS"
     )
 
-elif city == "Hà Nội":
+if (
+    form_type == "CQ DGW"
+    and city == "Hà Nội"
+):
 
     st.caption(
         "Form đang chọn: CQ DGW - Hà Nội"
     )
 
-else:
+if (
+    form_type == "CQ DGW"
+    and city == "TP.HCM"
+):
 
     st.caption(
         "Form đang chọn: CQ DGW - TP.HCM"
@@ -831,28 +853,26 @@ if st.button(
     )
 ):
 
-    # =========================
-    # VALIDATION
-    # =========================
-
     errors = []
 
     if not eu_name.strip():
-
         errors.append(
             "Chưa nhập Tên EU."
         )
 
     if not address.strip():
-
         errors.append(
             "Chưa nhập Địa chỉ."
         )
 
     if not products:
-
         errors.append(
             "Chưa nhập thông tin sản phẩm."
+        )
+
+    if send_sa_check and not creator_name.strip():
+        errors.append(
+            "Đã chọn Đẩy SA check nhưng chưa nhập KD yêu cầu."
         )
 
     for index, product in enumerate(
@@ -880,7 +900,6 @@ if st.button(
     if errors:
 
         for error in errors:
-
             st.error(
                 error
             )
@@ -893,7 +912,6 @@ if st.button(
     # =========================
 
     document_products = []
-
     appendix_products = []
 
     use_appendix_for_all = any(
@@ -969,15 +987,19 @@ if st.button(
     city_text = city
 
     if city == "TP.HCM":
-
         city_text = "Tp.HCM"
 
 
     # =========================
     # SELECT TEMPLATE
+    # Explicit mapping
     # =========================
 
-    if form_type == "ASUS":
+    template_file = None
+    file_prefix = None
+
+
+    if form_type == "CQ ASUS":
 
         template_file = (
             "CQ_SYSTEM_TEMPLATE_OPTIONAL_APPENDIX.docx"
@@ -987,8 +1009,9 @@ if st.button(
             "CQ_ASUS"
         )
 
-    elif (
-        form_type == "DGW"
+
+    if (
+        form_type == "CQ DGW"
         and city == "Hà Nội"
     ):
 
@@ -1000,7 +1023,11 @@ if st.button(
             "CQ_DGW_HN"
         )
 
-    else:
+
+    if (
+        form_type == "CQ DGW"
+        and city == "TP.HCM"
+    ):
 
         template_file = (
             "CQ_DGW_TEMPLATE_HCM_FIXED.docx"
@@ -1009,6 +1036,19 @@ if st.button(
         file_prefix = (
             "CQ_DGW_HCM"
         )
+
+
+    # Không cho form mới chạy nhầm template
+    if (
+        template_file is None
+        or file_prefix is None
+    ):
+
+        st.error(
+            "Form này chưa được cấu hình template."
+        )
+
+        st.stop()
 
 
     # =========================
@@ -1100,36 +1140,20 @@ if st.button(
             f".docx"
         )
 
-
-        # =========================
-        # WORD BYTES
-        # =========================
-
         word_bytes = (
             output.getvalue()
         )
 
 
         # =========================
-        # GOOGLE DRIVE + TRACKING
+        # UPLOAD DRIVE
         # =========================
 
         try:
 
-            # Drive dùng OAuth
             drive_service = (
                 get_drive_service()
             )
-
-            # Sheet dùng Service Account
-            sheets_service = (
-                get_sheets_service()
-            )
-
-
-            # =========================
-            # UPLOAD WORD TO DRIVE
-            # =========================
 
             drive_link = (
                 upload_cq_to_drive(
@@ -1148,89 +1172,104 @@ if st.button(
             )
 
 
-            # =========================
-            # ADD TO CQ TRACKING
-            # =========================
+            # Lưu CQ vừa generate vào session
+            st.session_state.generated_cq = {
+                "word_bytes":
+                    word_bytes,
 
-            append_tracking_row(
-                sheets_service=
-                    sheets_service,
+                "filename":
+                    filename,
 
-                creator_name=
-                    creator_name,
-
-                drive_link=
+                "drive_link":
                     drive_link,
 
-                issue_date=
+                "issue_date":
                     issue_date,
 
-                form_type=
+                "form_type":
                     form_type,
 
-                city=
+                "city":
                     city,
 
-                eu_name=
+                "eu_name":
                     eu_name,
 
-                address=
+                "address":
                     address,
 
-                products=
+                "products":
                     products
-            )
+            }
 
-
-            st.success(
-                "CQ đã được tạo thành công.\n\n"
-                "✅ Đã lưu Word lên Google Drive.\n\n"
-                "✅ Đã thêm vào CQ TRACKING."
-            )
+            st.session_state.tracking_submitted = False
 
 
             # =========================
-            # DRIVE LINK
+            # CHỈ ĐẨY TRACKING NẾU
+            # KD CÓ TÊN + TICK SA CHECK
             # =========================
 
-            st.link_button(
-                "MỞ CQ TRÊN GOOGLE DRIVE",
-                drive_link,
-                use_container_width=True
-            )
+            if (
+                creator_name.strip()
+                and send_sa_check
+            ):
 
+                sheets_service = (
+                    get_sheets_service()
+                )
 
-            # =========================
-            # TRACKING LINK
-            # =========================
+                append_tracking_row(
+                    sheets_service=
+                        sheets_service,
 
-            sheet_id = (
-                st.secrets[
-                    "google"
-                ][
-                    "sheet_id"
-                ]
-            )
+                    creator_name=
+                        creator_name,
 
-            tracking_link = (
-                "https://docs.google.com/"
-                "spreadsheets/d/"
-                f"{sheet_id}/edit"
-            )
+                    drive_link=
+                        drive_link,
 
-            st.link_button(
-                "MỞ CQ TRACKING",
-                tracking_link,
-                use_container_width=True
-            )
+                    issue_date=
+                        issue_date,
+
+                    form_type=
+                        form_type,
+
+                    city=
+                        city,
+
+                    eu_name=
+                        eu_name,
+
+                    address=
+                        address,
+
+                    products=
+                        products
+                )
+
+                st.session_state.tracking_submitted = True
+
+                st.success(
+                    "CQ đã được tạo thành công.\n\n"
+                    "✅ Đã lưu Word lên Google Drive.\n\n"
+                    "✅ Đã đẩy SA check vào CQ TRACKING."
+                )
+
+            else:
+
+                st.success(
+                    "CQ đã được tạo thành công.\n\n"
+                    "✅ Đã lưu Word lên Google Drive.\n\n"
+                    "ℹ️ Chưa đẩy vào CQ TRACKING."
+                )
 
 
         except Exception as google_error:
 
             st.warning(
                 "CQ đã tạo được Word "
-                "nhưng chưa lưu được lên "
-                "Google Drive / CQ TRACKING."
+                "nhưng có lỗi khi xử lý Google."
             )
 
             st.error(
@@ -1238,22 +1277,35 @@ if st.button(
                 f"{str(google_error)}"
             )
 
+            # Vẫn giữ Word để download
+            st.session_state.generated_cq = {
+                "word_bytes":
+                    word_bytes,
 
-        # =========================
-        # DOWNLOAD WORD
-        # =========================
+                "filename":
+                    filename,
 
-        st.download_button(
-            label="DOWNLOAD WORD",
-            data=word_bytes,
-            file_name=filename,
-            mime=(
-                "application/"
-                "vnd.openxmlformats-officedocument."
-                "wordprocessingml.document"
-            ),
-            use_container_width=True
-        )
+                "drive_link":
+                    None,
+
+                "issue_date":
+                    issue_date,
+
+                "form_type":
+                    form_type,
+
+                "city":
+                    city,
+
+                "eu_name":
+                    eu_name,
+
+                "address":
+                    address,
+
+                "products":
+                    products
+            }
 
 
     except FileNotFoundError:
@@ -1268,4 +1320,88 @@ if st.button(
         st.error(
             f"Có lỗi khi tạo CQ: "
             f"{str(e)}"
+        )
+
+
+# =========================
+# GENERATED CQ ACTIONS
+# =========================
+
+if st.session_state.generated_cq:
+
+    generated = (
+        st.session_state.generated_cq
+    )
+
+    st.divider()
+
+    st.subheader(
+        "CQ đã tạo"
+    )
+
+
+    # =========================
+    # DOWNLOAD WORD
+    # =========================
+
+    st.download_button(
+        label="DOWNLOAD WORD",
+        data=generated[
+            "word_bytes"
+        ],
+        file_name=generated[
+            "filename"
+        ],
+        mime=(
+            "application/"
+            "vnd.openxmlformats-officedocument."
+            "wordprocessingml.document"
+        ),
+        use_container_width=True
+    )
+
+
+    # =========================
+    # DRIVE LINK
+    # =========================
+
+    if generated[
+        "drive_link"
+    ]:
+
+        st.link_button(
+            "MỞ CQ TRÊN GOOGLE DRIVE",
+            generated[
+                "drive_link"
+            ],
+            use_container_width=True
+        )
+
+
+    # =========================
+    # TRACKING LINK
+    # =========================
+
+    if (
+        st.session_state.tracking_submitted
+    ):
+
+        sheet_id = (
+            st.secrets[
+                "google"
+            ][
+                "sheet_id"
+            ]
+        )
+
+        tracking_link = (
+            "https://docs.google.com/"
+            "spreadsheets/d/"
+            f"{sheet_id}/edit"
+        )
+
+        st.link_button(
+            "MỞ CQ TRACKING",
+            tracking_link,
+            use_container_width=True
         )
