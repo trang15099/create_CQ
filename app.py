@@ -264,12 +264,6 @@ def append_tracking_row(
 
 
     # =========================
-    # REQUEST TIME
-    # =========================
-
-    request_time = datetime.now().strftime(
-        "%d/%m/%Y %H:%M:%S"
-    )
 
 
     # =========================
@@ -283,11 +277,13 @@ def append_tracking_row(
         creator_name.strip(),
         # B - KD yêu cầu
 
-        True,
+        False,
         # C - Đẩy SA check
+        # Khi app đẩy row lên Tracking, checkbox vẫn để trống
 
-        request_time,
+        "",
         # D - Request time
+        # Chỉ ghi time khi Sale tự tick checkbox trên Google Sheet
 
         "",
         # E - SA phản hồi
